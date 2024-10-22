@@ -21,8 +21,12 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 try:
-    scheduler = job_schedulers.get_job_scheduler('slurm')
+    scheduler = job_schedulers.get_job_scheduler()
+
     current_jobs = scheduler.current_jobs(logger)
+    logger.debug(f"Current jobs: {list(current_jobs.keys())}")
+    logger.info(f"Current jobs (submitted or started): {len(current_jobs)}")
+
     # poll the buildkite API to check if there are any scheduled/running builds
     builds = all_started_builds(NHOURS)
 
