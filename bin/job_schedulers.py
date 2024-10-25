@@ -155,14 +155,15 @@ class PBSJobScheduler(JobScheduler):
         buildkite_url = job['web_url']
         tags = get_buildkite_job_tags(job)
         buildkite_queue = tags['queue']
-        logger.debug(f"Preparing to submit job {job_id} to PBS queue")
         
         # TODO: Retried jobs currently append their log to the existing one
         log_file = joinpath(build_log_dir, f"{job_id}.log")
         cmd = [
-            'qsub', '-V',
-            '-j', 'oe',
-            '-N', 'buildkite',
+            'qsub',
+            '-V',               # Inherit environment variables
+            '-m', 'n',          # No mail
+            '-j', 'oe',         # Output stdout and stderr
+            '-N', 'buildkite',  # Job name
             '-o',  log_file,
         ]
         pbs_tags = {k: v for k, v in tags.items() if k.startswith('pbs_')}
@@ -183,7 +184,12 @@ class PBSJobScheduler(JobScheduler):
         if 'pbs_l_walltime' not in pbs_tags:
             cmd.extend(["-l", f"walltime={DEFAULT_TIMELIMIT}"])
         cmd.extend(["--", joinpath(BUILDKITE_PATH, 'bin/schedule_job.sh'), job_id])
-        logger.debug(f"Submitting PBS job with command: {' '.join(cmd)}")
+
+        modules = tags.get('modules', "")
+        if modules != "":
+            cmd.append(modules)
+
+        logger.debug(f"PBS command: {' '.join(cmd)}")
         try:
             ret = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         except subprocess.CalledProcessError as e:
@@ -195,7 +201,7 @@ class PBSJobScheduler(JobScheduler):
 
         pbs_job_id = self.parse_job_id(ret.stdout)
         if pbs_job_id:
-            logger.info(f"Successfully submitted PBS job {pbs_job_id}, log {log_file}")
+            logger.info(f"Submitted PBS job {pbs_job_id}, log {log_file}")
             try:
                 with dbm.open(DATABASE_FILE, 'w') as db:
                     db[buildkite_url] = pbs_job_id
@@ -223,21 +229,26 @@ class PBSJobScheduler(JobScheduler):
             logger.error(f"Failed to retrieve PBS job status: {e}")
             return current_jobs
 
-        # Find active buildkite jobs, strip away header and footer
-        qsub_jobs = qstat_output.split('\n')[2:-1]
+        # Get active PBS job table, strip away header and footer
+        all_pbs_jobs = qstat_output.split('\n')[2:-1]
         active_pbs_jobs = []
-        for job in qsub_jobs:
+        for job in all_pbs_jobs:
             [job_id, job_name, user, time, state, queue] = job.split()
             if job_name == "buildkite":
-                active_pbs_jobs.append(job_id.split('.'))
-
+                active_pbs_jobs.append(job_id.split('.')[0])
+        logger.debug(f"active_pbs_jobs: {active_pbs_jobs}")
         # Remove jobs that are no longer running on PBS
         try:
             with dbm.open(DATABASE_FILE, 'w') as db:
-                for job_id in list(current_jobs.keys()):
+                for job_id in list(current_jobs.values()):
                     if job_id not in active_pbs_jobs:
                         logger.info(f"Removing completed job from database: {job_id}")
-                        del db[job_id]
+                        # TODO: Fix this awful loop...
+                        for k in db.keys():
+                            if db[k].decode() == job_id:
+                                del current_jobs[k.decode()]
+                                del db[k]
+
         except dbm.error as e:
             logger.error(f"Failed to remove completed jobs from database: {e}")
 
@@ -250,7 +261,7 @@ class PBSJobScheduler(JobScheduler):
         
         try:
             subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-            logger.info(f"Successfully cancelled PBS jobs: {', '.join(job_ids)}")
+            logger.info(f"Cancelled PBS jobs: {', '.join(job_ids)}")
         except subprocess.CalledProcessError as e:
             logger.error(f"Error when canceling jobs: {' '.join(e.cmd)}")
             logger.error(f"Return code: {e.returncode}")

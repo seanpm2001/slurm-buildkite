@@ -24,7 +24,7 @@ try:
     scheduler = job_schedulers.get_job_scheduler()
 
     current_jobs = scheduler.current_jobs(logger)
-    logger.debug(f"Current jobs: {list(current_jobs.keys())}")
+    logger.debug(f"Current jobs: {current_jobs}")
     logger.info(f"Current jobs (submitted or started): {len(current_jobs)}")
 
     # poll the buildkite API to check if there are any scheduled/running builds
@@ -59,6 +59,7 @@ try:
             # Cancel jobs marked by buildkite as 'canceled'
             if jobstate == 'canceled':
                 if buildkite_url in current_jobs:
+                    logger.debug(f"Cancel job: {buildkite_url}")
                     jobs_to_cancel.extend(current_jobs[buildkite_url])
                 continue
 
