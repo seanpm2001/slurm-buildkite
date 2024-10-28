@@ -1,4 +1,5 @@
 #!/bin/bash
+touch /glade/campaign/univ/ucit0011/slurm-buildkite/working
 
 case "$(hostname)" in
     "login3.cm.cluster"|"login4.cm.cluster")
@@ -9,8 +10,8 @@ case "$(hostname)" in
         export BUILDKITE_PATH="/clima/slurm-buildkite"
         export BUILDKITE_QUEUE='clima'
         ;;
-    derecho[0-6])
-        export BUILDKITE_PATH="/glade/u/home/nefrathe/clima/slurm-buildkite"
+    derecho[0-7]|"cron")
+        export BUILDKITE_PATH="/glade/campaign/univ/ucit0011/slurm-buildkite"
         export BUILDKITE_QUEUE='derecho'
         ;;
     *)
@@ -20,7 +21,7 @@ case "$(hostname)" in
 esac
 
 case "$(hostname)" in
-    derecho[0-6])
+    derecho[0-7]|"cron")
         source /etc/bash.bashrc
         ;;
     *)

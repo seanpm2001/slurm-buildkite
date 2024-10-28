@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 import logging
+# setup root logger
+logger = logging.Logger('poll')
+handler = logging.StreamHandler()
+# For debug statements: handler.setLevel(logging.DEBUG)
+handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
 import os
 from datetime import date
 from os.path import join as joinpath
@@ -11,21 +20,12 @@ import job_schedulers
 # Time window to query buildkite jobs
 NHOURS = 96
 
-# setup root logger
-logger = logging.Logger('poll')
-handler = logging.StreamHandler()
-# For debug statements: handler.setLevel(logging.DEBUG)
-handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-
 try:
     scheduler = job_schedulers.get_job_scheduler()
 
     current_jobs = scheduler.current_jobs(logger)
-    logger.debug(f"Current jobs: {current_jobs}")
     logger.info(f"Current jobs (submitted or started): {len(current_jobs)}")
+    logger.debug(f"Current jobs: {current_jobs}")
 
     # poll the buildkite API to check if there are any scheduled/running builds
     builds = all_started_builds(NHOURS)
@@ -60,7 +60,7 @@ try:
             if jobstate == 'canceled':
                 if buildkite_url in current_jobs:
                     logger.debug(f"Cancel job: {buildkite_url}")
-                    jobs_to_cancel.extend(current_jobs[buildkite_url])
+                    jobs_to_cancel.append(current_jobs[buildkite_url])
                 continue
 
             # jobstate is not pending, or a scheduled job (but not running yet)
@@ -101,10 +101,11 @@ try:
             if job['type'] == 'script':
                 buildkite_url = job['web_url']
                 if buildkite_url in current_jobs:
-                    jobs_to_cancel.extend(current_jobs[buildkite_url])
+                    jobs_to_cancel.append(current_jobs[buildkite_url])
 
-    # Cancel individually marked slurm jobs in one call
+    # Cancel individually marked hpc jobs in one call
     if jobs_to_cancel:
+        logger.debug(f"Jobs to cancel: {jobs_to_cancel}")
         scheduler.cancel_jobs(logger, jobs_to_cancel)
 
 except Exception:

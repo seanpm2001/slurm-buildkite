@@ -10,11 +10,11 @@ DEFAULT_SCHEDULER = os.environ.get('JOB_SYSTEM', 'slurm')
 DEFAULT_TIMELIMIT = '1:05:00'
 
 # Map from buildkite queue to slurm partition or PBS queue
-DEFAULT_PARTITIONS = {"derecho": "preempt", "test": "batch", "clima": "batch", "new-central": "expansion"}
-DEFAULT_GPU_PARTITIONS = {"derecho": "preempt", "test": "batch", "clima": "batch", "new-central": "gpu"}
+DEFAULT_PARTITIONS = {"derecho": "preempt@desched1", "test": "batch", "clima": "batch", "new-central": "expansion"}
+DEFAULT_GPU_PARTITIONS = {"derecho": "preempt@desched1", "test": "batch", "clima": "batch", "new-central": "gpu"}
 
 # Map from buildkite queue to HPC reservation
-DEFAULT_RESERVATIONS = {"new-central": "clima", "derecho": "UCIT0011"}
+DEFAULT_RESERVATIONS = {"new-central": "clima", "derecho": "UCIT00011"}
 
 # Search for the word "gpu" in the given dict
 def gpu_is_requested(scheduler_tags):
@@ -147,7 +147,7 @@ class SlurmJobScheduler(JobScheduler):
         else:
             return f"--{key}={value}"
 
-DATABASE_FILE = "pbs_jobs.db"  # gnu dict database, maps from pbs jobid to buildkite job url
+DATABASE_FILE = "jobs.db"  # Dict database, maps from pbs jobid to buildkite job url
 
 class PBSJobScheduler(JobScheduler):
     def submit_job(self, logger, build_log_dir, job):
@@ -158,6 +158,8 @@ class PBSJobScheduler(JobScheduler):
         
         # TODO: Retried jobs currently append their log to the existing one
         log_file = joinpath(build_log_dir, f"{job_id}.log")
+
+        # TODO: Try SSHing into derecho login to use env
         cmd = [
             'qsub',
             '-V',               # Inherit environment variables
@@ -224,7 +226,8 @@ class PBSJobScheduler(JobScheduler):
             return {}
 
         try:
-            qstat_output = subprocess.check_output(['qstat'], universal_newlines=True)
+            # The server is derecho-specific, could be abstractted out
+            qstat_output = subprocess.check_output(['qstat', '@desched1'], universal_newlines=True)
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to retrieve PBS job status: {e}")
             return current_jobs
@@ -236,13 +239,13 @@ class PBSJobScheduler(JobScheduler):
             [job_id, job_name, user, time, state, queue] = job.split()
             if job_name == "buildkite":
                 active_pbs_jobs.append(job_id.split('.')[0])
-        logger.debug(f"active_pbs_jobs: {active_pbs_jobs}")
+        logger.debug(f"Active PBS jobs: {active_pbs_jobs}")
         # Remove jobs that are no longer running on PBS
         try:
             with dbm.open(DATABASE_FILE, 'w') as db:
                 for job_id in list(current_jobs.values()):
                     if job_id not in active_pbs_jobs:
-                        logger.info(f"Removing completed job from database: {job_id}")
+                        logger.debug(f"Removing completed job from database: {job_id}")
                         # TODO: Fix this awful loop...
                         for k in db.keys():
                             if db[k].decode() == job_id:
@@ -256,12 +259,11 @@ class PBSJobScheduler(JobScheduler):
 
 
     def cancel_jobs(self, logger, job_ids):
-        logger.info(f"Attempting to cancel PBS jobs: {', '.join(job_ids)}")
+        logger.debug(f"Canceling PBS jobs: {', '.join(job_ids)}")
         cmd = ["qdel"] + job_ids
         
         try:
             subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-            logger.info(f"Cancelled PBS jobs: {', '.join(job_ids)}")
         except subprocess.CalledProcessError as e:
             logger.error(f"Error when canceling jobs: {' '.join(e.cmd)}")
             logger.error(f"Return code: {e.returncode}")
