@@ -1,5 +1,4 @@
 #!/bin/bash
-touch /glade/campaign/univ/ucit0011/slurm-buildkite/working
 
 case "$(hostname)" in
     "login3.cm.cluster"|"login4.cm.cluster")

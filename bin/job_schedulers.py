@@ -14,7 +14,7 @@ DEFAULT_PARTITIONS = {"derecho": "preempt@desched1", "test": "batch", "clima": "
 DEFAULT_GPU_PARTITIONS = {"derecho": "preempt@desched1", "test": "batch", "clima": "batch", "new-central": "gpu"}
 
 # Map from buildkite queue to HPC reservation
-DEFAULT_RESERVATIONS = {"new-central": "clima", "derecho": "UCIT00011"}
+DEFAULT_RESERVATIONS = {"new-central": "clima", "derecho": "UCIT0011"}
 
 # Search for the word "gpu" in the given dict
 def gpu_is_requested(scheduler_tags):
