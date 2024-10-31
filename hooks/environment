@@ -31,8 +31,7 @@ else
     qstat -f ${PBS_JOBID} || {
         echo "Error: qstat failed" >&2
     }
-    echo "Current nodes:"
-    cat $PBS_NODEFILE
+    echo "Current nodes: $(cat $PBS_NODEFILE)"
     # TODO: This should live in scratch on derecho
     export TMPDIR="/tmp/pbs-${PBS_JOBID}"
 fi

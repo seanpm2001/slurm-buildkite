@@ -270,7 +270,7 @@ class PBSJobScheduler(JobScheduler):
             logger.error(f"stderr: {e.stderr}")
         
         try:
-            with dbm.gnu.open(DATABASE_FILE, 'w') as current_jobs:
+            with dbm.open(DATABASE_FILE, 'w') as current_jobs:
                 for job_id in job_ids:
                     if job_id in current_jobs:
                         del current_jobs[job_id]
